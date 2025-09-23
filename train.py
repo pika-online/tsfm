@@ -2,14 +2,24 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from tsfm.dataset.core import get_dataloader
+from tsfm.dataset.core import *
 from tsfm.model.gru import *
 import os
 
-def train_model(csv_file, seq_len=60, batch_size=64, epochs=20, lr=1e-3, device="cuda:1"):
+def train_model(csv_file, seq_len=60, batch_size=64, epochs=30, lr=1e-3, device="cuda:0"):
     # dataloader + dataset（dataset 里包含scaler）
-    train_loader, train_dataset = get_dataloader(csv_file, seq_len, batch_size, mode="train")
-    val_loader,   val_dataset   = get_dataloader(csv_file, seq_len, batch_size, mode="val")
+    dataset = np.load("samples/dataset.npz")
+    tr_data = dataset["TR"]
+    cv_data = dataset["CV"]
+    
+    # 构建 Dataset 和 DataLoader
+    train_dataset = WindowDataset(tr_data)
+    valid_dataset = WindowDataset(cv_data)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4)
+    valid_loader = DataLoader(valid_dataset, batch_size=64, shuffle=False, num_workers=2)
+    print(f"Train dataset: {len(train_dataset)} windows")
+    print(f"Valid dataset: {len(valid_dataset)} windows")
+    
 
     model = GRUVAE(input_dim=6,latent_dim=32).to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -20,7 +30,7 @@ def train_model(csv_file, seq_len=60, batch_size=64, epochs=20, lr=1e-3, device=
         # ---- train ----
         model.train()
         train_loss = 0
-        for x, mean, std in train_loader:
+        for x in train_loader:
             x = x.to(device)
             x_hat, mu, logvar = model(x)
             loss, recon, kl = vae_loss(x_hat, x, mu, logvar, beta=0.1)
@@ -34,14 +44,14 @@ def train_model(csv_file, seq_len=60, batch_size=64, epochs=20, lr=1e-3, device=
         val_loss = 0
         model.eval()
         with torch.no_grad():
-            for x, mean, std in val_loader:
+            for x in valid_loader:
                 x = x.to(device)
                 x_hat, mu, logvar = model(x)
                 loss, recon, kl = vae_loss(x_hat, x, mu, logvar, beta=0.1)
                 val_loss += loss.item()
 
         avg_train_loss = train_loss / len(train_loader)
-        avg_val_loss   = val_loss / len(val_loader)
+        avg_val_loss   = val_loss / len(valid_loader)
         print(f"Epoch [{epoch+1}/{epochs}] | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
 
         # ---- 保存最好模型 ----
