@@ -171,7 +171,9 @@ def metric(pred, true):
 def exp(
     csv_file:str,
     model_name:str,
-    configs:dict
+    data_name:str,
+    configs:dict,
+    exp_dir:str
 ):
     
     # 数据加载
@@ -210,9 +212,9 @@ def exp(
         
     model_module = importlib.import_module(f'tsfm.backbone.models.{model_name}')
     Model = model_module.Model
-    exp_dir = f"exp/{model_name}@use_time={use_time}"
-    os.makedirs(exp_dir, exist_ok=True)
-    model_path = os.path.join(exp_dir, 'best_model.pth')
+    model_dir = os.path.join(exp_dir, "models")
+    os.makedirs(model_dir, exist_ok=True)
+    model_path = os.path.join(model_dir, f'model_{data_name}.pth')
     
     # 训练
     device = configs["training"]['device']
@@ -252,7 +254,7 @@ def exp(
     mae, mse = metric(test_preds, test_trues)
     print(f'Test LOSS:{test_loss:.4f} Test MAE: {mae:.4f}, MSE: {mse:.4f}')
     
-    return exp_dir, (mae,mse)
+    return mae,mse
     
     
     
@@ -273,36 +275,34 @@ if __name__ == "__main__":
             'batch_size': 32,
         },
         "model":{
-            'use_time': True,
+            'use_time': False,
         }
     }
 
     model_name = 'Transformer'
     # model_name = 'Informer'
+    use_time = configs['model']['use_time']
+    exp_dir = f"exp/{model_name}@use_time={use_time}"
+    os.makedirs(exp_dir, exist_ok=True)
+    result_path = f"{exp_dir}/results.xlsx"
     
-    # csv_file = 'dataset/ours.csv'
-    csv_file = 'dataset/ETTh1.csv'
-    exp_dir, (mae, mse) = exp(csv_file, model_name, configs)
     
+    data_dir = 'dataset/'
+    results = []
+    for data_name in os.listdir(data_dir):
+        if data_name.endswith('.csv'):
+            csv_file = os.path.join(data_dir, data_name)
+            mae, mse = exp(csv_file, model_name, data_name, configs, exp_dir)
+            print(f'Dataset: {data_name}, Model: {model_name}, MAE: {mae:.4f}, MSE: {mse:.4f}')
+            print('============================================================\n')
+            results.append({
+                'dataset': data_name,
+                'model': model_name,
+                'mae': mae,
+                'mse': mse
+            })
     
-    
-    # data_dir = 'dataset/'
-    # result_path = "result.xlsx"
-    # results = []
-    # for data_name in os.listdir(data_dir):
-    #     if data_name.endswith('.csv'):
-    #         csv_file = os.path.join(data_dir, data_name)
-    #         exp_dir, (mae, mse) = exp(csv_file, model_name, configs)
-    #         print(f'Dataset: {data_name}, Model: {model_name}, MAE: {mae:.4f}, MSE: {mse:.4f}')
-    #         print('============================================================\n')
-    #         results.append({
-    #             'dataset': data_name,
-    #             'model': model_name,
-    #             'mae': mae,
-    #             'mse': mse
-    #         })
-    
-    # if results:
-    #     df_results = pd.DataFrame(results)
-    #     df_results.to_excel(result_path, index=False)
-    #     print(f'All experiment results saved to: {result_path}')
+    if results:
+        df_results = pd.DataFrame(results)
+        df_results.to_excel(result_path, index=False)
+        print(f'All experiment results saved to: {result_path}')
