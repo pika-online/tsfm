@@ -234,8 +234,8 @@ def exp(
         loss_valid, _, _ = eval_one_epoch(model, valid_loader, pred_len, label_len, criterion, device)
         print(f'=====> Epoch {epoch+1}, Valid Loss: {loss_valid:.6f}')
         
-        loss_test, _, _ = eval_one_epoch(model, test_loader, pred_len, label_len, criterion, device)
-        print(f'=====> Epoch {epoch+1}, Test Loss: {loss_test:.6f}')
+        # loss_test, _, _ = eval_one_epoch(model, test_loader, pred_len, label_len, criterion, device)
+        # print(f'=====> Epoch {epoch+1}, Test Loss: {loss_test:.6f}')
         
         early_stopping(loss_valid, model, model_path)
         
