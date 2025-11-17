@@ -2,4 +2,3 @@ pandas
 einops
 reformer_pytorch
 scikit-learn
-openpyxl

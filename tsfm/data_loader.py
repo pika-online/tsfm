@@ -24,7 +24,6 @@ class TimeSeriesDataset(Dataset):
 
         # 多变量
         self.data = df.iloc[:, 1:].values.astype(np.float32)
-        print(f"Before: max: {self.data.max()}, min: {self.data.min()}")
         self.data = self.scaler.transform(self.data) 
         
 

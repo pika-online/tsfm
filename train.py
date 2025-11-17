@@ -73,7 +73,7 @@ def load_data(file_path, seq_len, label_len, pred_len, split_ratio=[0.7, 0.1, 0.
     # 训练集scaler
     scaler = StandardScaler()
     scaler.fit(df_train.iloc[:, 1:].values)
-    print(scaler.mean_, scaler.scale_)
+    # print(scaler.mean_, scaler.scale_)
     
 
     tsd_train = TimeSeriesDataset(df_train, seq_len, label_len, pred_len, scaler)
@@ -284,7 +284,7 @@ if __name__ == "__main__":
     use_time = configs['model']['use_time']
     exp_dir = f"exp/{model_name}@use_time={use_time}"
     os.makedirs(exp_dir, exist_ok=True)
-    result_path = f"{exp_dir}/results.xlsx"
+    result_path = f"{exp_dir}/results.csv"
     
     
     data_dir = 'dataset/'
@@ -298,11 +298,11 @@ if __name__ == "__main__":
             results.append({
                 'dataset': data_name,
                 'model': model_name,
-                'mae': mae,
-                'mse': mse
+                'mae': f"{mae:.3f}",
+                'mse': f"{mse:.3f}"
             })
     
     if results:
         df_results = pd.DataFrame(results)
-        df_results.to_excel(result_path, index=False)
+        df_results.to_csv(result_path, index=False)
         print(f'All experiment results saved to: {result_path}')
