@@ -89,4 +89,4 @@ class Model(Base_Model):
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
 
         dec_out = self._denormalize(dec_out, means, stdev)
-        return dec_out
+        return dec_out[:, -self.pred_len:, :]

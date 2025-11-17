@@ -5,7 +5,15 @@ import pandas as pd
 import numpy as np
 import importlib
 import os 
+from sklearn.preprocessing import StandardScaler
 
+# 固定随机种子
+fix_seed = 2021
+random.seed(fix_seed)
+torch.manual_seed(fix_seed)
+np.random.seed(fix_seed)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 class EarlyStopping:
     def __init__(self, patience=7, verbose=False, delta=0):
@@ -61,12 +69,18 @@ def load_data(file_path, seq_len, label_len, pred_len, split_ratio=[0.7, 0.1, 0.
     df_train = df[border1s[0]:border2s[0]]
     df_valid = df[border1s[1]:border2s[1]]
     df_test = df[border1s[2]:border2s[2]]
+    print(f"Train shape: {df_train.shape}, Valid shape: {df_valid.shape}, Test shape: {df_test.shape}")
+    # 训练集scaler
+    scaler = StandardScaler()
+    scaler.fit(df_train.iloc[:, 1:].values)
+    print(scaler.mean_, scaler.scale_)
+    
 
-    tsd_train = TimeSeriesDataset(df_train, seq_len, label_len, pred_len)
-    tsd_valid = TimeSeriesDataset(df_valid, seq_len, label_len, pred_len)
-    tsd_test = TimeSeriesDataset(df_test, seq_len, label_len, pred_len)
-
-    return tsd_train, tsd_valid, tsd_test
+    tsd_train = TimeSeriesDataset(df_train, seq_len, label_len, pred_len, scaler)
+    tsd_valid = TimeSeriesDataset(df_valid, seq_len, label_len, pred_len, scaler)
+    tsd_test = TimeSeriesDataset(df_test, seq_len, label_len, pred_len, scaler)
+    
+    return tsd_train, tsd_valid, tsd_test, scaler
 
 
 def train_one_epoch(model, train_loader, pred_len, label_len, criterion, optimizer, device, epoch):
@@ -132,7 +146,11 @@ def eval_one_epoch(model, valid_loader, pred_len, label_len, criterion, device):
             trues.append(batch_y.detach().cpu().numpy())
     
     avg_loss = total_loss / len(valid_loader)
-    return avg_loss, np.concatenate(preds), np.concatenate(trues)
+    preds = np.concatenate(preds,axis=0)
+    trues = np.concatenate(trues,axis=0)
+    # print(f"eval_one_epoch: preds shape: {preds.shape}, trues shape: {trues.shape}")
+    
+    return avg_loss, preds, trues
 
 
 def metric(pred, true):
@@ -155,11 +173,6 @@ def exp(
     model_name:str,
     configs:dict
 ):
-    # 固定随机种子
-    fix_seed = 2021
-    random.seed(fix_seed)
-    torch.manual_seed(fix_seed)
-    np.random.seed(fix_seed)
     
     # 数据加载
     seq_len = configs["dataset"]['seq_len']
@@ -167,10 +180,11 @@ def exp(
     pred_len = configs["dataset"]['pred_len']
     split_ratio = configs["dataset"]['split_ratio']
     batch_size = configs["training"]['batch_size']
-    tsd_train, tsd_valid, tsd_test = load_data(csv_file, seq_len, label_len, pred_len, split_ratio)
+    tsd_train, tsd_valid, tsd_test, scaler = load_data(csv_file, seq_len, label_len, pred_len, split_ratio)
     train_loader = torch.utils.data.DataLoader(tsd_train, batch_size=batch_size, shuffle=True)
     valid_loader = torch.utils.data.DataLoader(tsd_valid, batch_size=batch_size, shuffle=False)
     test_loader = torch.utils.data.DataLoader(tsd_test, batch_size=batch_size, shuffle=False)
+    
     
     # 模型初始化
     use_time = configs["model"]['use_time']
@@ -214,8 +228,13 @@ def exp(
     for epoch in range(train_epochs):
         loss_train = train_one_epoch(model, train_loader, pred_len, label_len, criterion, model_optim, device, epoch)
         print(f'=====> Epoch {epoch+1}, Train Loss: {loss_train:.6f}')
+        
         loss_valid, _, _ = eval_one_epoch(model, valid_loader, pred_len, label_len, criterion, device)
         print(f'=====> Epoch {epoch+1}, Valid Loss: {loss_valid:.6f}')
+        
+        loss_test, _, _ = eval_one_epoch(model, test_loader, pred_len, label_len, criterion, device)
+        print(f'=====> Epoch {epoch+1}, Test Loss: {loss_test:.6f}')
+        
         early_stopping(loss_valid, model, model_path)
         
         if early_stopping.early_stop:
@@ -227,8 +246,11 @@ def exp(
     # 测试
     model.load_state_dict(torch.load(model_path))
     test_loss, test_preds, test_trues = eval_one_epoch(model, test_loader, pred_len, label_len, criterion, device)
+    # shape = test_preds.shape
+    # test_preds = scaler.inverse_transform(test_preds.reshape(shape[0]*shape[1],-1)).reshape(shape)
+    # test_trues = scaler.inverse_transform(test_trues.reshape(shape[0]*shape[1],-1)).reshape(shape)
     mae, mse = metric(test_preds, test_trues)
-    print(f'Test MAE: {mae:.4f}, MSE: {mse:.4f}')
+    print(f'Test LOSS:{test_loss:.4f} Test MAE: {mae:.4f}, MSE: {mse:.4f}')
     
     return exp_dir, (mae,mse)
     
@@ -248,7 +270,7 @@ if __name__ == "__main__":
             'learning_rate': 0.0001,
             'patience': 3,
             'train_epochs': 5,
-            'batch_size': 64,
+            'batch_size': 32,
         },
         "model":{
             'use_time': True,
@@ -257,23 +279,30 @@ if __name__ == "__main__":
 
     model_name = 'Transformer'
     # model_name = 'Informer'
-    data_dir = 'dataset/'
-    result_path = "result.xlsx"
-    results = []
-    for data_name in os.listdir(data_dir):
-        if data_name.endswith('.csv'):
-            csf_file = os.path.join(data_dir, data_name)
-            exp_dir, (mae, mse) = exp(csf_file, model_name, configs)
-            print(f'Dataset: {data_name}, Model: {model_name}, MAE: {mae:.4f}, MSE: {mse:.4f}')
-            print('============================================================\n')
-            results.append({
-                'dataset': data_name,
-                'model': model_name,
-                'mae': mae,
-                'mse': mse
-            })
     
-    if results:
-        df_results = pd.DataFrame(results)
-        df_results.to_excel(result_path, index=False)
-        print(f'All experiment results saved to: {result_path}')
+    # csv_file = 'dataset/ours.csv'
+    csv_file = 'dataset/ETTh1.csv'
+    exp_dir, (mae, mse) = exp(csv_file, model_name, configs)
+    
+    
+    
+    # data_dir = 'dataset/'
+    # result_path = "result.xlsx"
+    # results = []
+    # for data_name in os.listdir(data_dir):
+    #     if data_name.endswith('.csv'):
+    #         csv_file = os.path.join(data_dir, data_name)
+    #         exp_dir, (mae, mse) = exp(csv_file, model_name, configs)
+    #         print(f'Dataset: {data_name}, Model: {model_name}, MAE: {mae:.4f}, MSE: {mse:.4f}')
+    #         print('============================================================\n')
+    #         results.append({
+    #             'dataset': data_name,
+    #             'model': model_name,
+    #             'mae': mae,
+    #             'mse': mse
+    #         })
+    
+    # if results:
+    #     df_results = pd.DataFrame(results)
+    #     df_results.to_excel(result_path, index=False)
+    #     print(f'All experiment results saved to: {result_path}')

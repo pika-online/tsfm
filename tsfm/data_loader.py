@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
-from torch.utils.data import Dataset, DataLoader
-import torch
+from torch.utils.data import Dataset
+from sklearn.preprocessing import StandardScaler
 
 class TimeSeriesDataset(Dataset):
-    def __init__(self, df:pd.DataFrame, seq_len:int, label_len:int, pred_len:int):
+    def __init__(self, df:pd.DataFrame, seq_len:int, label_len:int, pred_len:int, scaler:StandardScaler):
         """
         df: [date,[words],OT]
         """
@@ -12,6 +12,7 @@ class TimeSeriesDataset(Dataset):
         self.seq_len = seq_len
         self.label_len = label_len
         self.pred_len = pred_len
+        self.scaler = scaler
 
         # 时间特征
         df_stamp = pd.to_datetime(df['date']).to_frame(name='date')
@@ -21,7 +22,11 @@ class TimeSeriesDataset(Dataset):
         df_stamp['hour'] = (df_stamp['date'].dt.hour if hasattr(df_stamp['date'].dt, 'hour') else 0) / 23.0
         self.timestamp = df_stamp.drop(columns=['date']).values.astype(np.float32)
 
+        # 多变量
         self.data = df.iloc[:, 1:].values.astype(np.float32)
+        print(f"Before: max: {self.data.max()}, min: {self.data.min()}")
+        self.data = self.scaler.transform(self.data) 
+        
 
     def __getitem__(self, index):
         s_begin = index
@@ -39,6 +44,7 @@ class TimeSeriesDataset(Dataset):
     def __len__(self):
         return len(self.data) - self.seq_len - self.pred_len + 1
     
+
 if __name__ == "__main__":
     
     df = pd.read_csv('dataset/ETTh1.csv')
@@ -54,10 +60,15 @@ if __name__ == "__main__":
     border1s = [0, num_train - seq_len, len(df) - num_test - seq_len]
     border2s = [num_train, num_train + num_valid, len(df)]
     
+    # 数据集划分
     df_train = df[border1s[0]:border2s[0]]
     df_valid = df[border1s[1]:border2s[1]]
     df_test = df[border1s[2]:border2s[2]]
+    
+    # 训练集scaler
+    scaler = StandardScaler()
+    scaler.fit(df_train.iloc[:, 1:].values)
 
-    tsd_train = TimeSeriesDataset(df_train, seq_len, label_len, pred_len)
-    tsd_valid = TimeSeriesDataset(df_valid, seq_len, label_len, pred_len)
-    tsd_test = TimeSeriesDataset(df_test, seq_len, label_len, pred_len)
+    tsd_train = TimeSeriesDataset(df_train, seq_len, label_len, pred_len, scaler)
+    tsd_valid = TimeSeriesDataset(df_valid, seq_len, label_len, pred_len, scaler)
+    tsd_test = TimeSeriesDataset(df_test, seq_len, label_len, pred_len, scaler)
