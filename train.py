@@ -275,14 +275,17 @@ if __name__ == "__main__":
             'batch_size': 32,
         },
         "model":{
-            'use_time': False,
+            'use_time': True,
         }
     }
 
     model_name = 'Transformer'
     # model_name = 'Informer'
     use_time = configs['model']['use_time']
-    exp_dir = f"exp/{model_name}@use_time={use_time}"
+    seq_len = configs["dataset"]['seq_len']
+    label_len = configs["dataset"]['label_len']
+    pred_len = configs["dataset"]['pred_len']
+    exp_dir = f"exp/{model_name}@seq={seq_len}@label={label_len}@pred={pred_len}@use_time={use_time}"
     os.makedirs(exp_dir, exist_ok=True)
     result_path = f"{exp_dir}/results.csv"
     
