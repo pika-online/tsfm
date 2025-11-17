@@ -58,8 +58,8 @@ class DataEmbedding(nn.Module):
         self.temporal_embedding = TimeFeatureEmbedding(d_inp=d_time, d_model=d_model)
         self.dropout = nn.Dropout(p=dropout)
 
-    def forward(self, x, x_mark):
-        if x_mark is None:
+    def forward(self, x, x_mark, use_time=True):
+        if use_time is None:
             out = self.value_embedding(x) + self.position_embedding(x)
         else:
             out = self.value_embedding(x) + self.temporal_embedding(x_mark) + self.position_embedding(x)
@@ -85,10 +85,12 @@ class Model(nn.Module):
         dropout=0.1,
         attn_dropout=0.1,
         activation='gelu',
-        factor=1
+        factor=1,
+        use_time=True
     ):
         super().__init__()
         self.pred_len = pred_len
+        self.use_time = use_time
 
         # Embeddings
         self.enc_embedding = DataEmbedding(c_in, c_time, d_model, dropout=dropout)
@@ -138,17 +140,27 @@ class Model(nn.Module):
             projection=nn.Linear(d_model, c_out, bias=True)
         )
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
-        means = x_enc.mean(1, keepdim=True).detach()
-        x_enc = x_enc - means
-        stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        x_enc = x_enc / stdev
 
-        enc_out = self.enc_embedding(x_enc, x_mark_enc)
+    def _normalize(self, x):
+        means = x.mean(1, keepdim=True).detach()
+        x = x - means
+        stdev = torch.sqrt(torch.var(x, dim=1, keepdim=True, unbiased=False) + 1e-5)
+        x = x / stdev
+        return x, means, stdev
+    
+    def _denormalize(self, x, means, stdev):
+        x = x * stdev + means
+        return x
+    
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
+        
+        x_enc, means, stdev = self._normalize(x_enc)
+
+        enc_out = self.enc_embedding(x_enc, x_mark_enc, use_time=self.use_time)
         enc_out, _ = self.encoder(enc_out, attn_mask=None)
 
-        dec_out = self.dec_embedding(x_dec, x_mark_dec)
+        dec_out = self.dec_embedding(x_dec, x_mark_dec, use_time=self.use_time)
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
 
-        dec_out = dec_out * stdev + means
+        dec_out = self._denormalize(dec_out, means, stdev)
         return dec_out

@@ -14,14 +14,14 @@ class TimeSeriesDataset(Dataset):
         self.pred_len = pred_len
 
         # 时间特征
-        df_stamp = pd.to_datetime(df['date'])
-        df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)/13.0
-        df_stamp['day'] = df_stamp.date.apply(lambda row: row.day, 1)/32.0
-        df_stamp['weekday'] = df_stamp.date.apply(lambda row: row.weekday(), 1)/7.0
-        df_stamp['hour'] = df_stamp.date.apply(lambda row: row.hour, 1)/24.0
-        self.df_stamp = df_stamp.drop(['date'], axis=1).values
+        df_stamp = pd.to_datetime(df['date']).to_frame(name='date')
+        df_stamp['month'] = df_stamp['date'].dt.month / 12.0
+        df_stamp['day'] = df_stamp['date'].dt.day / 31.0
+        df_stamp['weekday'] = df_stamp['date'].dt.weekday / 6.0
+        df_stamp['hour'] = (df_stamp['date'].dt.hour if hasattr(df_stamp['date'].dt, 'hour') else 0) / 23.0
+        self.timestamp = df_stamp.drop(columns=['date']).values.astype(np.float32)
 
-        self.data = df.columns[1:].values
+        self.data = df.iloc[:, 1:].values.astype(np.float32)
 
     def __getitem__(self, index):
         s_begin = index
@@ -31,8 +31,8 @@ class TimeSeriesDataset(Dataset):
 
         seq_x = self.data[s_begin:s_end]
         seq_y = self.data[r_begin:r_end]
-        seq_x_mark = self.df_stamp[s_begin:s_end]
-        seq_y_mark = self.df_stamp[r_begin:r_end]
+        seq_x_mark = self.timestamp[s_begin:s_end]
+        seq_y_mark = self.timestamp[r_begin:r_end]
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark
 
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     df = pd.read_csv('dataset/ETTh1.csv')
     num_train = int(len(df) * 0.7)
     num_test = int(len(df) * 0.2)
-    num_vali = len(df) - num_train - num_test
+    num_valid = len(df) - num_train - num_test
 
     seq_len = 96
     label_len = 48
@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     # 数据集切片
     border1s = [0, num_train - seq_len, len(df) - num_test - seq_len]
-    border2s = [num_train, num_train + num_vali, len(df)]
+    border2s = [num_train, num_train + num_valid, len(df)]
     
     df_train = df[border1s[0]:border2s[0]]
     df_valid = df[border1s[1]:border2s[1]]
