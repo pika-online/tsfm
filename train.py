@@ -143,22 +143,11 @@ def metric(pred, true):
     def MSE(pred, true):
         return np.mean((true - pred) ** 2)
 
-    def RMSE(pred, true):
-        return np.sqrt(MSE(pred, true))
-
-    def MAPE(pred, true):
-        return np.mean(np.abs((true - pred) / true))
-
-    def MSPE(pred, true):
-        return np.mean(np.square((true - pred) / true))
-    
     mae = MAE(pred, true)
     mse = MSE(pred, true)
-    rmse = RMSE(pred, true)
-    mape = MAPE(pred, true)
-    mspe = MSPE(pred, true)
 
-    return mae, mse, rmse, mape, mspe
+
+    return mae, mse
 
 
 def exp(
@@ -238,10 +227,10 @@ def exp(
     # 测试
     model.load_state_dict(torch.load(model_path))
     test_loss, test_preds, test_trues = eval_one_epoch(model, test_loader, pred_len, label_len, criterion, device)
-    mae, mse, rmse, mape, mspe = metric(test_preds, test_trues)
-    print(f'Test MAE: {mae:.4f}, MSE: {mse:.4f}, RMSE: {rmse:.4f}')
+    mae, mse = metric(test_preds, test_trues)
+    print(f'Test MAE: {mae:.4f}, MSE: {mse:.4f}')
     
-    return mae, mse, rmse, mape, mspe
+    return exp_dir, (mae,mse)
     
     
     
@@ -259,13 +248,32 @@ if __name__ == "__main__":
             'learning_rate': 0.0001,
             'patience': 5,
             'train_epochs': 10,
-            'batch_size': 32,
+            'batch_size': 64,
         },
         "model":{
-            'use_time': False,
+            'use_time': True,
         }
     }
 
-    csf_file = 'dataset/ETTh1.csv'
     model_name = 'Transformer'
-    mae, mse, rmse, mape, mspe = exp(csf_file, model_name, configs)
+    # model_name = 'Informer'
+    data_dir = 'dataset/'
+    result_path = "result.xlsx"
+    results = []
+    for data_name in os.listdir(data_dir):
+        if data_name.endswith('.csv'):
+            csf_file = os.path.join(data_dir, data_name)
+            exp_dir, (mae, mse) = exp(csf_file, model_name, configs)
+            print(f'Dataset: {data_name}, Model: {model_name}, MAE: {mae:.4f}, MSE: {mse:.4f}')
+            print('============================================================\n')
+            results.append({
+                'dataset': data_name,
+                'model': model_name,
+                'mae': mae,
+                'mse': mse
+            })
+    
+    if results:
+        df_results = pd.DataFrame(results)
+        df_results.to_excel(result_path, index=False)
+        print(f'All experiment results saved to: {result_path}')

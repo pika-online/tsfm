@@ -1,21 +1,24 @@
-from .base import Base_Model
+import torch
 import torch.nn as nn
-from tsfm.backbone.layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer
-from tsfm.backbone.layers.SelfAttention_Family import FullAttention, AttentionLayer
+from tsfm.backbone.layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer, ConvLayer
+from tsfm.backbone.layers.SelfAttention_Family import  AttentionLayer, ProbAttention
+from .base import Base_Model
 from tsfm.backbone.layers.Embedding import DataEmbedding
 
 
 
 class Model(Base_Model):
     """
-    Vanilla Transformer 
+    Informer with Propspare attention in O(LlogL) complexity
+    Paper link: https://ojs.aaai.org/index.php/AAAI/article/view/17325/17132
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs
+    ):
         super().__init__(**kwargs)
-        c_in = kwargs['c_in']
         self.pred_len = kwargs['pred_len']
         self.use_time = kwargs['use_time']
+        c_in = kwargs['c_in']
         c_time = kwargs['c_time']
         d_model = kwargs['d_model']
         dropout = kwargs['dropout']
@@ -23,11 +26,11 @@ class Model(Base_Model):
         d_ff = kwargs['d_ff']
         e_layers = kwargs['e_layers']
         d_layers = kwargs['d_layers']
-        attn_dropout = kwargs['attn_dropout']
-        activation = kwargs['activation']
         factor = kwargs['factor']
+        activation = kwargs['activation']
         c_out = kwargs['c_out']
-
+        
+        
         # Embeddings
         self.enc_embedding = DataEmbedding(c_in, c_time, d_model, dropout=dropout)
         self.dec_embedding = DataEmbedding(c_in, c_time, d_model, dropout=dropout)
@@ -37,47 +40,42 @@ class Model(Base_Model):
             [
                 EncoderLayer(
                     AttentionLayer(
-                        FullAttention(False, factor, attention_dropout=attn_dropout, output_attention=False),
-                        d_model,
-                        n_heads
-                    ),
+                        ProbAttention(False, factor, attention_dropout=dropout,
+                                      output_attention=False),
+                        d_model, n_heads),
                     d_model,
                     d_ff,
                     dropout=dropout,
                     activation=activation
-                )
-                for _ in range(e_layers)
+                ) for l in range(e_layers)
             ],
-            norm_layer=nn.LayerNorm(d_model)
+            [
+                ConvLayer(d_model) for l in range(e_layers - 1)
+            ],
+            norm_layer=torch.nn.LayerNorm(d_model)
         )
-
         # Decoder
         self.decoder = Decoder(
             [
                 DecoderLayer(
                     AttentionLayer(
-                        FullAttention(True, factor, attention_dropout=attn_dropout, output_attention=False),
-                        d_model,
-                        n_heads
-                    ),
+                        ProbAttention(True, factor, attention_dropout=dropout, output_attention=False),
+                        d_model, n_heads),
                     AttentionLayer(
-                        FullAttention(False, factor, attention_dropout=attn_dropout, output_attention=False),
-                        d_model,
-                        n_heads
-                    ),
+                        ProbAttention(False, factor, attention_dropout=dropout, output_attention=False),
+                        d_model, n_heads),
                     d_model,
                     d_ff,
                     dropout=dropout,
                     activation=activation,
                 )
-                for _ in range(d_layers)
+                for l in range(d_layers)
             ],
-            norm_layer=nn.LayerNorm(d_model),
+            norm_layer=torch.nn.LayerNorm(d_model),
             projection=nn.Linear(d_model, c_out, bias=True)
         )
 
 
-    
     
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         
