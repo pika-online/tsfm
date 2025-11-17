@@ -246,8 +246,8 @@ if __name__ == "__main__":
         "training":{
             'device': "cuda",
             'learning_rate': 0.0001,
-            'patience': 5,
-            'train_epochs': 10,
+            'patience': 3,
+            'train_epochs': 5,
             'batch_size': 64,
         },
         "model":{
