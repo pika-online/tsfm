@@ -13,6 +13,7 @@ class TimeSeriesDataset(Dataset):
         self.label_len = label_len
         self.pred_len = pred_len
 
+        # 时间特征
         df_stamp = pd.to_datetime(df['date'])
         df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)/13.0
         df_stamp['day'] = df_stamp.date.apply(lambda row: row.day, 1)/32.0
