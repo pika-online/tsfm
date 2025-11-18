@@ -13,10 +13,12 @@ class Model(Base_Model):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        c_in = kwargs['c_in']
-        self.pred_len = kwargs['pred_len']
-        self.use_time = kwargs['use_time']
-        c_time = kwargs['c_time']
+        x_dim = kwargs['x_dim']
+        time_dim = kwargs['time_dim']
+        seq_len = kwargs['seq_len']
+        label_len = kwargs['label_len']
+        pred_len = kwargs['pred_len']
+        time_feat = kwargs['time_feat']
         d_model = kwargs['d_model']
         dropout = kwargs['dropout']
         n_heads = kwargs['n_heads']
@@ -26,11 +28,11 @@ class Model(Base_Model):
         attn_dropout = kwargs['attn_dropout']
         activation = kwargs['activation']
         factor = kwargs['factor']
-        c_out = kwargs['c_out']
+
 
         # Embeddings
-        self.enc_embedding = DataEmbedding(c_in, c_time, d_model, dropout=dropout)
-        self.dec_embedding = DataEmbedding(c_in, c_time, d_model, dropout=dropout)
+        self.enc_embedding = DataEmbedding(x_dim, time_dim, d_model, dropout=dropout, mode=time_feat)
+        self.dec_embedding = DataEmbedding(x_dim, time_dim, d_model, dropout=dropout, mode=time_feat)
 
         # Encoder
         self.encoder = Encoder(
@@ -73,7 +75,7 @@ class Model(Base_Model):
                 for _ in range(d_layers)
             ],
             norm_layer=nn.LayerNorm(d_model),
-            projection=nn.Linear(d_model, c_out, bias=True)
+            projection=nn.Linear(d_model, x_dim, bias=True)
         )
 
 
@@ -89,4 +91,4 @@ class Model(Base_Model):
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
 
         dec_out = self._denormalize(dec_out, means, stdev)
-        return dec_out[:, -self.pred_len:, :]
+        return dec_out

@@ -189,13 +189,12 @@ def exp(
     
     
     # 模型初始化
-    use_time = configs["model"]['use_time']
+    time_feat = configs['model']['time_feat']
     input_feat_dim = tsd_train.data.shape[-1]
     time_feat_dim = tsd_train.timestamp.shape[-1]
     model_config = {
-        'c_in': input_feat_dim,
-        'c_time': time_feat_dim,
-        'c_out': input_feat_dim,
+        'x_dim': input_feat_dim,
+        'time_dim': time_feat_dim,
         'seq_len': seq_len,
         'label_len': label_len,
         'pred_len': pred_len,
@@ -208,7 +207,9 @@ def exp(
         'attn_dropout': 0.1,
         'activation': 'gelu',
         'factor': 3,
-        'use_time': use_time
+        "top_k": 5,
+        "num_kernels": 6,
+        'time_feat': time_feat
     }
     print(model_config)
         
@@ -277,20 +278,21 @@ if __name__ == "__main__":
             'batch_size': 32,
         },
         "model":{
-            'use_time': False,
+            'time_feat': "add",
         }
     }
 
     # model_name = 'Transformer'
     # model_name = 'Informer'
     model_name = "iTransformer"
+    # model_name = "TimesNet"
 
 
-    use_time = configs['model']['use_time']
+    time_feat = configs['model']['time_feat']
     seq_len = configs["dataset"]['seq_len']
     label_len = configs["dataset"]['label_len']
     pred_len = configs["dataset"]['pred_len']
-    exp_dir = f"exp/{model_name}@seq={seq_len}@label={label_len}@pred={pred_len}@use_time={use_time}"
+    exp_dir = f"exp/{model_name}@seq={seq_len}@label={label_len}@pred={pred_len}@time_feat={time_feat}"
     os.makedirs(exp_dir, exist_ok=True)
     result_path = f"{exp_dir}/results.csv"
     

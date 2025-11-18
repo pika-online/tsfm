@@ -16,24 +16,26 @@ class Model(Base_Model):
     def __init__(self, **kwargs
     ):
         super().__init__(**kwargs)
-        self.pred_len = kwargs['pred_len']
-        self.use_time = kwargs['use_time']
-        c_in = kwargs['c_in']
-        c_time = kwargs['c_time']
+        x_dim = kwargs['x_dim']
+        time_dim = kwargs['time_dim']
+        seq_len = kwargs['seq_len']
+        label_len = kwargs['label_len']
+        pred_len = kwargs['pred_len']
+        time_feat = kwargs['time_feat']
         d_model = kwargs['d_model']
         dropout = kwargs['dropout']
         n_heads = kwargs['n_heads']
         d_ff = kwargs['d_ff']
         e_layers = kwargs['e_layers']
         d_layers = kwargs['d_layers']
-        factor = kwargs['factor']
+        attn_dropout = kwargs['attn_dropout']
         activation = kwargs['activation']
-        c_out = kwargs['c_out']
+        factor = kwargs['factor']
         
         
         # Embeddings
-        self.enc_embedding = DataEmbedding(c_in, c_time, d_model, dropout=dropout)
-        self.dec_embedding = DataEmbedding(c_in, c_time, d_model, dropout=dropout)
+        self.enc_embedding = DataEmbedding(x_dim, time_dim, d_model, dropout=dropout, mode=time_feat)
+        self.dec_embedding = DataEmbedding(x_dim, time_dim, d_model, dropout=dropout, mode=time_feat)
 
         # Encoder
         self.encoder = Encoder(
@@ -72,7 +74,7 @@ class Model(Base_Model):
                 for l in range(d_layers)
             ],
             norm_layer=torch.nn.LayerNorm(d_model),
-            projection=nn.Linear(d_model, c_out, bias=True)
+            projection=nn.Linear(d_model, x_dim, bias=True)
         )
 
 
