@@ -196,6 +196,8 @@ def exp(
         'c_in': input_feat_dim,
         'c_time': time_feat_dim,
         'c_out': input_feat_dim,
+        'seq_len': seq_len,
+        'label_len': label_len,
         'pred_len': pred_len,
         'd_model': 512,
         'n_heads': 8,
@@ -275,12 +277,15 @@ if __name__ == "__main__":
             'batch_size': 32,
         },
         "model":{
-            'use_time': True,
+            'use_time': False,
         }
     }
 
-    model_name = 'Transformer'
+    # model_name = 'Transformer'
     # model_name = 'Informer'
+    model_name = "iTransformer"
+
+
     use_time = configs['model']['use_time']
     seq_len = configs["dataset"]['seq_len']
     label_len = configs["dataset"]['label_len']
