@@ -24,7 +24,8 @@ class DataEmbedding_inverted(nn.Module):
             x = self.value_embedding(x)
         else:
             # 拼在变量维：B x (x_dim + time_dim) x L
-            x = self.value_embedding(torch.cat([x, x_mark.permute(0, 2, 1)], dim=1))
+            x = self.value_embedding(x)
+            # x = self.value_embedding(torch.cat([x, x_mark.permute(0, 2, 1)], dim=1))
         # x: [Batch, Tokens, d_model]
         return self.dropout(x)
 
@@ -60,6 +61,7 @@ class TemporalConvBlock(nn.Module):
         return out
 
 
+
 class Model(Base_Model):
     """
     iTransformer + 多尺度时序卷积增强
@@ -92,14 +94,14 @@ class Model(Base_Model):
         activation = kwargs['activation']
         factor = kwargs['factor']
         self.pred_len = pred_len
-        self.causal = kwargs.get('causal', False)
+        self.label_len = label_len
 
         # -------- 多尺度卷积模块 --------
         self.temporal_block = TemporalConvBlock(x_dim, kernel_sizes=(3, 5, 7))
 
         # -------- 不同注入方式需要的融合层 --------
         self.agg_type = agg_type
-        valid_agg = ['add', 'concat', 'gate', 'film', 'soft']
+        valid_agg = ['add', 'concat', 'gate', 'film']
         if self.agg_type not in valid_agg:
             raise ValueError(f"agg_type must be one of {valid_agg}, got {self.agg_type}")
 
@@ -141,6 +143,7 @@ class Model(Base_Model):
         )
 
         self.proj_dec = nn.Linear(d_model, pred_len, bias=True)
+
 
 
     def _aggregate(self, x_enc, temporal_feat):
@@ -202,12 +205,8 @@ class Model(Base_Model):
         enc_out, _ = self.encoder(enc_out, attn_mask=None)     # B x tokens x d_model
 
         # 5) 投影到预测长度，并只保留前 N 个变量 token
-        if self.causal:
-            pass
-        else:
-            # 原始投影路径
-            dec_tmp = self.proj_dec(enc_out)                         # B x tokens x pred_len
-            dec_out = dec_tmp.permute(0, 2, 1)[:, :, :F]             # B x pred_len x x_dim
+        dec_tmp = self.proj_dec(enc_out)                         # B x tokens x pred_len
+        dec_out = dec_tmp.permute(0, 2, 1)[:, :, :F]
 
 
         # 6) 反归一化
